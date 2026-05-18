@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MijnBudget">
+<meta name="theme-color" content="#0f1923">
+<title>MijnBudget</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg: #0f1923;
+  --surface: #1a2535;
+  --surface2: #223044;
+  --border: rgba(255,255,255,0.08);
+  --text: #f0f4f8;
+  --muted: #7a90a8;
+  --accent: #4f9cf9;
+  --green: #3ecf8e;
+  --red: #f66060;
+  --amber: #f5a623;
+  --purple: #a78bfa;
+  --font: 'DM Sans', sans-serif;
+  --mono: 'DM Mono', monospace;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 15px; }
+#app { display: flex; flex-direction: column; height: 100dvh; max-width: 430px; margin: 0 auto; position: relative; overflow: hidden; }
+
+/* Header */
+.header { padding: 52px 20px 16px; background: var(--bg); flex-shrink: 0; }
+.header-top { display: flex; justify-content: space-between; align-items: flex-start; }
+.header h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; }
+.header-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.month-badge { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; color: var(--muted); cursor: pointer; }
+
+/* Pages */
+.pages { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 16px; padding-bottom: calc(80px + var(--safe-bottom)); scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+.page { display: none; animation: fadeUp .25s ease; }
+.page.active { display: block; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+/* Bottom Nav */
+.bottom-nav { position: absolute; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); display: flex; padding-bottom: var(--safe-bottom); flex-shrink: 0; z-index: 100; }
+.nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 10px 4px 8px; border: none; background: none; color: var(--muted); font-family: var(--font); font-size: 10px; gap: 4px; cursor: pointer; transition: color .15s; }
+.nav-btn.active { color: var(--accent); }
+.nav-icon { font-size: 20px; line-height: 1; }
+
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.card-title { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 12px; }
+
+/* Metrics grid */
+.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; }
+.metric-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.metric-value { font-size: 22px; font-weight: 600; font-family: var(--mono); letter-spacing: -1px; }
+
+/* Upload zone */
+.upload-zone { border: 1.5px dashed rgba(79,156,249,0.3); border-radius: var(--radius); padding: 36px 20px; text-align: center; cursor: pointer; background: rgba(79,156,249,0.04); margin-bottom: 12px; transition: all .2s; }
+.upload-zone:active { background: rgba(79,156,249,0.08); }
+.upload-icon { font-size: 36px; margin-bottom: 10px; }
+.upload-title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+.upload-sub { font-size: 12px; color: var(--muted); }
+
+/* Bank selector */
+.bank-select { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.bank-btn { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; cursor: pointer; text-align: left; transition: all .15s; }
+.bank-btn.active { border-color: var(--accent); background: rgba(79,156,249,0.1); }
+.bank-btn-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+.bank-btn-sub { font-size: 11px; color: var(--muted); }
+
+/* Transactions */
+.tx-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.tx-item:last-child { border-bottom: none; }
+.tx-dot { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+.tx-info { flex: 1; min-width: 0; }
+.tx-desc { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tx-cat { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.tx-amount { font-family: var(--mono); font-size: 14px; font-weight: 500; flex-shrink: 0; }
+
+/* Progress bars */
+.prog-wrap { margin-bottom: 14px; }
+.prog-header { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.prog-header span:last-child { font-family: var(--mono); }
+.prog-bg { background: rgba(255,255,255,0.06); border-radius: 4px; height: 6px; overflow: hidden; }
+.prog-fill { height: 6px; border-radius: 4px; transition: width .5s ease; }
+
+/* Budget rows */
+.bud-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.bud-row:last-child { border-bottom: none; }
+.bud-cat { width: 100px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.bud-bar { flex: 1; }
+.bud-vals { font-size: 11px; font-family: var(--mono); color: var(--muted); text-align: right; width: 70px; flex-shrink: 0; }
+
+/* Goals */
+.goal-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 12px; }
+.goal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+.goal-name { font-size: 15px; font-weight: 500; }
+.goal-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.goal-pct { font-size: 24px; font-weight: 600; font-family: var(--mono); color: var(--accent); }
+
+/* Buttons */
+.btn-primary { width: 100%; padding: 14px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); font-family: var(--font); font-size: 15px; font-weight: 500; cursor: pointer; transition: opacity .15s; margin-top: 8px; }
+.btn-primary:active { opacity: .85; }
+.btn-ghost { width: 100%; padding: 12px; background: none; color: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: var(--font); font-size: 14px; cursor: pointer; margin-top: 8px; }
+
+/* Chips */
+.chip { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+.chip-green { background: rgba(62,207,142,0.15); color: var(--green); }
+.chip-red { background: rgba(246,96,96,0.15); color: var(--red); }
+.chip-amber { background: rgba(245,166,35,0.15); color: var(--amber); }
+.chip-blue { background: rgba(79,156,249,0.15); color: var(--accent); }
+.chip-purple { background: rgba(167,139,250,0.15); color: var(--purple); }
+
+/* Tips */
+.tip { border-left: 2px solid; border-radius: 0 8px 8px 0; padding: 10px 14px; margin-bottom: 8px; font-size: 13px; line-height: 1.5; }
+.tip-green { border-color: var(--green); background: rgba(62,207,142,0.08); color: #a7f3d0; }
+.tip-amber { border-color: var(--amber); background: rgba(245,166,35,0.08); color: #fcd34d; }
+.tip-red { border-color: var(--red); background: rgba(246,96,96,0.08); color: #fca5a5; }
+
+/* Spinner */
+.spinner-wrap { display: none; align-items: center; gap: 10px; padding: 14px; background: var(--surface); border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+.spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Install banner */
+.install-banner { background: rgba(79,156,249,0.1); border: 1px solid rgba(79,156,249,0.25); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 12px; font-size: 13px; line-height: 1.5; color: #93c5fd; }
+.install-banner strong { color: var(--accent); }
+
+/* Section divider */
+.section-label { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 16px 0 8px; }
+
+/* Search */
+.search-input { width: 100%; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-family: var(--font); font-size: 14px; margin-bottom: 10px; }
+.search-input:focus { outline: none; border-color: var(--accent); }
+
+/* Chart canvas wrapper */
+.chart-wrap { position: relative; width: 100%; height: 180px; }
+
+/* Month tabs */
+.month-tabs { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 4px; scrollbar-width: none; }
+.month-tabs::-webkit-scrollbar { display: none; }
+.month-tab { flex-shrink: 0; padding: 6px 14px; border-radius: 20px; font-size: 12px; border: 1px solid var(--border); background: none; color: var(--muted); cursor: pointer; font-family: var(--font); }
+.month-tab.active { background: var(--accent); border-color: var(--accent); color: white; font-weight: 500; }
+
+/* Empty state */
+.empty { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; }
+.empty-icon { font-size: 40px; margin-bottom: 12px; opacity: .4; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <h1 id="page-title">Overzicht</h1>
+        <div class="header-sub" id="page-sub">Mei 2026</div>
+      </div>
+      <div class="month-badge" id="month-selector">▾ Maand</div>
+    </div>
+  </div>
+
+  <div class="pages" id="pages">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-home">
+      <div class="metrics" id="dash-metrics">
+        <div class="metric"><div class="metric-label">Inkomen</div><div class="metric-value" id="m-inc" style="color:var(--green)">€0</div></div>
+        <div class="metric"><div class="metric-label">Uitgaven</div><div class="metric-value" id="m-exp" style="color:var(--red)">€0</div></div>
+        <div class="metric"><div class="metric-label">Saldo</div><div class="metric-value" id="m-bal">€0</div></div>
+        <div class="metric"><div class="metric-label">Transacties</div><div class="metric-value" id="m-cnt" style="color:var(--accent)">0</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Uitgaven per categorie</div>
+        <div class="chart-wrap"><canvas id="catChart" role="img" aria-label="Categoriegrafiek"></canvas></div>
+        <div id="cat-legend" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Maandoverzicht</div>
+        <div class="chart-wrap"><canvas id="monthChart" role="img" aria-label="Maandoverzicht"></canvas></div>
+      </div>
+
+      <div id="ai-tips-home"></div>
+    </div>
+
+    <!-- IMPORT -->
+    <div class="page" id="page-import">
+      <div class="install-banner">
+        <strong>Op startscherm zetten:</strong> tik op &#8942; (Android Chrome) → "Toevoegen aan startscherm" → "Toevoegen". Dan heb je een app-icoontje!
+      </div>
+
+      <div class="section-label">Stap 1 — Kies je bank</div>
+      <div class="bank-select">
+        <div class="bank-btn active" id="bank-kbc" onclick="selectBank('kbc')">
+          <div class="bank-btn-name">KBC</div>
+          <div class="bank-btn-sub">Hoofdrekening</div>
+        </div>
+        <div class="bank-btn" id="bank-belfius" onclick="selectBank('belfius')">
+          <div class="bank-btn-name">Belfius</div>
+          <div class="bank-btn-sub">Spaarrekening</div>
+        </div>
+      </div>
+
+      <div class="section-label">Stap 2 — Upload CSV</div>
+      <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept=".csv,.txt" style="display:none" onchange="handleFile(this.files[0])">
+        <div class="upload-icon">&#128196;</div>
+        <div class="upload-title">Tik om CSV te uploaden</div>
+        <div class="upload-sub">KBC of Belfius export bestand</div>
+      </div>
+
+      <div class="spinner-wrap" id="spinner">
+        <div class="spinner"></div>
+        <span id="spinner-text">Bezig met verwerken...</span>
+      </div>
+
+      <div id="import-success" style="display:none">
+        <div class="card">
+          <div class="card-title">Import geslaagd ✓</div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">Transacties</span><span id="imp-cnt" style="font-family:var(--mono)">0</span></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--muted)">Inkomsten</span><span id="imp-inc" style="color:var(--green);font-family:var(--mono)">€0</span></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px"><span style="color:var(--muted)">Uitgaven</span><span id="imp-exp" style="color:var(--red);font-family:var(--mono)">€0</span></div>
+        </div>
+        <button class="btn-primary" onclick="goHome()">Bekijk dashboard ›</button>
+      </div>
+
+      <div class="section-label">Of probeer demo</div>
+      <button class="btn-ghost" onclick="loadDemo()">&#9654; Demo data laden</button>
+
+      <div class="section-label" style="margin-top:20px">Hoe exporteer je bij KBC?</div>
+      <div class="card" style="font-size:13px;line-height:1.7;color:var(--muted)">
+        1. Open KBC app of kbc.be<br>
+        2. Ga naar "Rekeningen"<br>
+        3. Tik op je rekening<br>
+        4. Tik rechtsboven op "Exporteren"<br>
+        5. Kies <strong style="color:var(--text)">CSV</strong> en selecteer periode<br>
+        6. Download en upload hier
+      </div>
+    </div>
+
+    <!-- TRANSACTIES -->
+    <div class="page" id="page-tx">
+      <div class="month-tabs" id="month-tabs"></div>
+      <input class="search-input" type="search" id="tx-search" placeholder="&#128269; Zoeken..." oninput="renderTx()">
+      <div class="card" style="padding:16px">
+        <div id="tx-list"><div class="empty"><div class="empty-icon">&#128196;</div>Importeer eerst transacties</div></div>
+      </div>
+      <div id="tx-count" style="font-size:11px;color:var(--muted);text-align:center;padding-bottom:8px"></div>
+    </div>
+
+    <!-- BUDGET -->
+    <div class="page" id="page-budget">
+      <div class="card" id="budget-card">
+        <div class="card-title">Budget vs werkelijk</div>
+        <div id="budget-rows"><div class="empty" style="padding:20px 0"><div class="empty-icon">&#127919;</div>Laad data via Import</div></div>
+      </div>
+      <div id="budget-alerts"></div>
+    </div>
+
+    <!-- DOELEN -->
+    <div class="page" id="page-goals">
+      <div class="goal-card">
+        <div class="goal-header">
+          <div>
+            <div class="goal-name">&#127958; <span id="goal-vak-name">Vakantie 2027</span></div>
+            <div class="goal-sub" id="goal-vak-sub">€643/maand · deadline 2027-07</div>
+          </div>
+          <div class="goal-pct" id="goal-vak-pct">0%</div>
+        </div>
+        <div class="prog-wrap">
+          <div class="prog-header"><span id="goal-vak-lbl">€0 gespaard</span><span id="goal-vak-total">€9.000</span></div>
+          <div class="prog-bg"><div class="prog-fill" id="pb-vak" style="width:0%;background:var(--accent)"></div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+          <div style="background:var(--surface2);border-radius:8px;padding:10px">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Gespaard</div>
+            <div style="font-size:16px;font-weight:600;font-family:var(--mono);color:var(--accent)" id="goal-vak-saved">€0</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:8px;padding:10px">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Nog nodig</div>
+            <div style="font-size:16px;font-weight:600;font-family:var(--mono);color:var(--muted)" id="goal-vak-rest">€9.000</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="goal-card">
+        <div class="goal-header">
+          <div>
+            <div class="goal-name">&#128200; <span id="goal-bel-name">Beleggingspot</span></div>
+            <div class="goal-sub" id="goal-bel-sub">€800/maand · ETF IWDA/VWCE</div>
+          </div>
+          <div class="goal-pct" id="goal-bel-pct" style="color:var(--green)">0%</div>
+        </div>
+        <div class="prog-wrap">
+          <div class="prog-header"><span id="goal-bel-lbl">€0 belegd</span><span id="goal-bel-total">€11.200</span></div>
+          <div class="prog-bg"><div class="prog-fill" id="pb-bel" style="width:0%;background:var(--green)"></div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+          <div style="background:var(--surface2);border-radius:8px;padding:10px">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Belegd</div>
+            <div style="font-size:16px;font-weight:600;font-family:var(--mono);color:var(--green)" id="goal-bel-saved">€0</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:8px;padding:10px">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Nog nodig</div>
+            <div style="font-size:16px;font-weight:600;font-family:var(--mono);color:var(--muted)" id="goal-bel-rest">€11.200</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="goal-txs-card">
+        <div class="card-title">Recente spaar- en beleggingstransacties</div>
+        <div id="goal-txs"><div class="empty" style="padding:16px 0"><div class="empty-icon">&#128200;</div>Importeer transacties</div></div>
+      </div>
+    </div>
+
+    <!-- INSTELLINGEN -->
+    <div class="page" id="page-settings">
+
+      <div class="card">
+        <div class="card-title">&#127958; Vakantiedoel</div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Naam vakantiedoel</div>
+          <input type="text" id="set-vak-naam" value="Vakantie 2027" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:14px">
+        </div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Totaal spaardoel (€)</div>
+          <input type="number" id="set-vak-doel" value="9000" min="100" step="100" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--mono);font-size:16px">
+        </div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Maandelijks spaarbedrag vakantie (€)</div>
+          <input type="number" id="set-vak-mnd" value="643" min="10" step="10" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--mono);font-size:16px">
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Deadline (maand en jaar)</div>
+          <input type="month" id="set-vak-deadline" value="2027-07" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:14px">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">&#128200; Beleggingspot</div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Naam beleggingsdoel</div>
+          <input type="text" id="set-bel-naam" value="Beleggingspot" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:14px">
+        </div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Maandelijks beleggen (€)</div>
+          <input type="number" id="set-bel-mnd" value="800" min="10" step="10" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--mono);font-size:16px">
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Einddoel beleggen (€)</div>
+          <input type="number" id="set-bel-doel" value="11200" min="100" step="100" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--mono);font-size:16px">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">&#128181; Maandbudgetten aanpassen</div>
+        <div id="budget-edit-list"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem">
+        <button onclick="saveSettings()" style="padding:14px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer">&#10003; Opslaan</button>
+        <button onclick="resetSettings()" style="padding:14px;background:none;color:var(--muted);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font);font-size:14px;cursor:pointer">&#8635; Reset</button>
+      </div>
+
+      <div id="settings-saved" style="display:none;background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.3);border-radius:var(--radius-sm);padding:12px;text-align:center;font-size:13px;color:var(--green);margin-bottom:1rem">
+        &#10003; Instellingen opgeslagen!
+      </div>
+
+    </div>
+
+  </div><!-- /pages -->
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" onclick="showPage('home',this,'Overzicht','Jouw maandoverzicht')">
+      <span class="nav-icon">&#9962;</span>
+      <span>Home</span>
+    </button>
+    <button class="nav-btn" onclick="showPage('import',this,'Importeer','KBC &amp; Belfius CSV')">
+      <span class="nav-icon">&#128228;</span>
+      <span>Import</span>
+    </button>
+    <button class="nav-btn" onclick="showPage('tx',this,'Transacties','Alle bewegingen')">
+      <span class="nav-icon">&#128203;</span>
+      <span>Transacties</span>
+    </button>
+    <button class="nav-btn" onclick="showPage('goals',this,'Spaardoelen','Vakantie &amp; beleggen')">
+      <span class="nav-icon">&#128184;</span>
+      <span>Doelen</span>
+    </button>
+    <button class="nav-btn" onclick="showPage('settings',this,'Instellingen','Pas alles aan')">
+      <span class="nav-icon">&#9881;</span>
+      <span>Instellingen</span>
+    </button>
+  </nav>
+</div>
+
+<script>
+const CATS = ['Huur/Hypotheek','Energie & water','Verzekeringen','Telecom','Abonnementen','Boodschappen','Bakker','Kleding','Vrije tijd','Auto & transport','Gezondheid','Sparen','Beleggen','Inkomen','Overig'];
+const CAT_COLORS = ['#4f9cf9','#3ecf8e','#f5a623','#f66060','#a78bfa','#38bdf8','#fb923c','#86efac','#c084fc','#22d3ee','#f472b6','#4f9cf9','#3ecf8e','#94a3b8','#64748b'];
+const CAT_EMOJI = {'Huur/Hypotheek':'&#127968;','Energie & water':'&#9889;','Verzekeringen':'&#128736;','Telecom':'&#128241;','Abonnementen':'&#127909;','Boodschappen':'&#128722;','Bakker':'&#127838;','Kleding':'&#128084;','Vrije tijd':'&#127881;','Auto & transport':'&#128663;','Gezondheid':'&#128138;','Sparen':'&#128181;','Beleggen':'&#128200;','Inkomen':'&#128176;','Overig':'&#128443;'};
+const DEFAULT_BUDGETS = {'Huur/Hypotheek':790,'Energie & water':165,'Verzekeringen':79,'Telecom':113,'Abonnementen':30,'Boodschappen':500,'Bakker':70,'Kleding':500,'Vrije tijd':650,'Auto & transport':100,'Gezondheid':50,'Sparen':643,'Beleggen':800,'Inkomen':0,'Overig':100};
+const DEFAULT_SETTINGS = {vakNaam:'Vakantie 2027',vakDoel:9000,vakMnd:643,vakDeadline:'2027-07',belNaam:'Beleggingspot',belMnd:800,belDoel:11200};
+
+let transactions = [];
+let selectedBank = 'kbc';
+let activeMonth = '';
+let catChartInst = null, monthChartInst = null;
+let budgets = {...DEFAULT_BUDGETS};
+let cfg = {...DEFAULT_SETTINGS};
+
+function loadSettings(){
+  try{
+    const s=localStorage.getItem('mb_settings');
+    if(s){ cfg={...DEFAULT_SETTINGS,...JSON.parse(s)}; }
+    const b=localStorage.getItem('mb_budgets');
+    if(b){ budgets={...DEFAULT_BUDGETS,...JSON.parse(b)}; }
+  }catch(e){}
+}
+
+function saveSettings(){
+  cfg.vakNaam=document.getElementById('set-vak-naam').value||'Vakantie 2027';
+  cfg.vakDoel=parseInt(document.getElementById('set-vak-doel').value)||9000;
+  cfg.vakMnd=parseInt(document.getElementById('set-vak-mnd').value)||643;
+  cfg.vakDeadline=document.getElementById('set-vak-deadline').value||'2027-07';
+  cfg.belNaam=document.getElementById('set-bel-naam').value||'Beleggingspot';
+  cfg.belMnd=parseInt(document.getElementById('set-bel-mnd').value)||800;
+  cfg.belDoel=parseInt(document.getElementById('set-bel-doel').value)||11200;
+  CATS.filter(c=>c!=='Inkomen').forEach(c=>{
+    const el=document.getElementById('bud-'+c.replace(/[^a-z]/gi,''));
+    if(el) budgets[c]=parseInt(el.value)||0;
+  });
+  try{
+    localStorage.setItem('mb_settings',JSON.stringify(cfg));
+    localStorage.setItem('mb_budgets',JSON.stringify(budgets));
+  }catch(e){}
+  const saved=document.getElementById('settings-saved');
+  saved.style.display='block';
+  setTimeout(()=>saved.style.display='none',2500);
+}
+
+function resetSettings(){
+  if(!confirm('Alle instellingen terugzetten naar standaard?')) return;
+  cfg={...DEFAULT_SETTINGS};
+  budgets={...DEFAULT_BUDGETS};
+  try{ localStorage.removeItem('mb_settings'); localStorage.removeItem('mb_budgets'); }catch(e){}
+  fillSettingsForm();
+}
+
+function fillSettingsForm(){
+  document.getElementById('set-vak-naam').value=cfg.vakNaam;
+  document.getElementById('set-vak-doel').value=cfg.vakDoel;
+  document.getElementById('set-vak-mnd').value=cfg.vakMnd;
+  document.getElementById('set-vak-deadline').value=cfg.vakDeadline;
+  document.getElementById('set-bel-naam').value=cfg.belNaam;
+  document.getElementById('set-bel-mnd').value=cfg.belMnd;
+  document.getElementById('set-bel-doel').value=cfg.belDoel;
+  const editEl=document.getElementById('budget-edit-list');
+  editEl.innerHTML=CATS.filter(c=>c!=='Inkomen').map(c=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <label style="color:var(--muted)">${CAT_EMOJI[c]||''} ${c}</label>
+      <input type="number" id="bud-${c.replace(/[^a-z]/gi,'')}" value="${budgets[c]||0}" min="0" step="10"
+        style="width:90px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:14px;text-align:right">
+    </div>`).join('');
+}
+
+loadSettings();
+
+function fmt(n){ return '€'+(Math.round(Math.abs(n))).toLocaleString('nl-BE'); }
+function fmts(n){ return (n<0?'-':'')+fmt(n); }
+
+function selectBank(b){
+  selectedBank=b;
+  ['kbc','belfius'].forEach(x=>{
+    const el=document.getElementById('bank-'+x);
+    el.classList.toggle('active',x===b);
+  });
+}
+
+function showPage(name, btn, title, sub){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  btn.classList.add('active');
+  document.getElementById('page-title').textContent = title;
+  document.getElementById('page-sub').innerHTML = sub;
+  if(name==='home') renderDashboard();
+  if(name==='tx') renderTx();
+  if(name==='budget') renderBudget();
+  if(name==='goals') renderGoals();
+  if(name==='settings'){ fillSettingsForm(); }
+}
+
+function goHome(){
+  const btn = document.querySelector('.nav-btn');
+  showPage('home', btn, 'Overzicht', activeMonth||'');
+}
+
+function guessCategory(desc){
+  desc=(desc||'').toLowerCase();
+  if(/colruyt|lidl|delhaize|aldi|carrefour|albert|spar|okay|boni/.test(desc)) return 'Boodschappen';
+  if(/bakker|bakkerij|brood/.test(desc)) return 'Bakker';
+  if(/huur|hypotheek/.test(desc)) return 'Huur/Hypotheek';
+  if(/engie|luminus|fluvius|water|pidpa/.test(desc)) return 'Energie & water';
+  if(/proximus|telenet|orange|base|scarlet/.test(desc)) return 'Telecom';
+  if(/netflix|spotify|google|amazon|disney|adobe/.test(desc)) return 'Abonnementen';
+  if(/ag ins|ethias|axa|allianz|verzeker/.test(desc)) return 'Verzekeringen';
+  if(/h&m|zara|primark|c&a|jbc|torfs|kleding/.test(desc)) return 'Kleding';
+  if(/restaurant|cafe|bar|frituur|pizza|mcdo|quick|sushi|bistro/.test(desc)) return 'Vrije tijd';
+  if(/total|shell|benzine|parking|nmbs|delijn/.test(desc)) return 'Auto & transport';
+  if(/apotheek|dokter|ziekenhuis|mutualiteit/.test(desc)) return 'Gezondheid';
+  if(/loon|salaris|wedde|werkgever|kinderbijslag|gezinsbijslag/.test(desc)) return 'Inkomen';
+  if(/bolero|euronext|degiro|etf|fonds/.test(desc)) return 'Beleggen';
+  if(/spaar|savings|vakantie 2027/.test(desc)) return 'Sparen';
+  return 'Overig';
+}
+
+async function categorizeWithAI(txs){
+  const batch = txs.slice(0,40);
+  const prompt = `Categoriseer elke transactie in één van: ${CATS.join(', ')}.\nGeef ENKEL JSON array terug zonder uitleg:\n[{"i":0,"cat":"Boodschappen"}]\nTransacties:\n${batch.map((t,i)=>`${i}: "${t.desc}" ${t.amount>0?'inkomst':'uitgave'} ${fmt(t.amount)}`).join('\n')}`;
+  try{
+    const r = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,messages:[{role:'user',content:prompt}]})});
+    const d = await r.json();
+    const txt = d.content.map(x=>x.text||'').join('').replace(/```json|```/g,'').trim();
+    JSON.parse(txt).forEach(({i,cat})=>{ if(txs[i]&&CATS.includes(cat)) txs[i].cat=cat; });
+  } catch(e){ console.log('AI fallback'); }
+  return txs;
+}
+
+async function handleFile(file){
+  if(!file) return;
+  document.getElementById('spinner').style.display='flex';
+  document.getElementById('spinner-text').textContent='Bestand inlezen...';
+  const text = await file.text();
+  let parsed = parseCSV(text);
+  if(!parsed.length){ alert('Geen transacties gevonden. Controleer je CSV formaat.'); document.getElementById('spinner').style.display='none'; return; }
+  parsed.forEach(t=>{ t.cat=guessCategory(t.desc); t.bank=selectedBank; });
+  document.getElementById('spinner-text').textContent='AI categoriseert '+parsed.length+' transacties...';
+  parsed = await categorizeWithAI(parsed);
+  transactions=[...transactions,...parsed];
+  setActiveMonth();
+  document.getElementById('spinner').style.display='none';
+  showImportResult(parsed);
+}
+
+function parseCSV(text){
+  const result=Papa.parse(text,{skipEmptyLines:true});
+  const rows=result.data;
+  const txs=[];
+  rows.forEach((row,ri)=>{
+    if(ri===0) return;
+    let date='',desc='',amount=0;
+    if(row.length>=5){ date=row[0]||''; desc=(row[2]||row[1]||'').trim(); const a=(row[4]||row[3]||'0').replace(/[€\s]/g,'').replace(',','.'); amount=parseFloat(a)||0; }
+    else if(row.length>=3){ date=row[0]||''; desc=(row[1]||'').trim(); const a=(row[2]||'0').replace(/[€\s]/g,'').replace(',','.'); amount=parseFloat(a)||0; }
+    if(desc&&amount!==0) txs.push({date,desc,amount,cat:'Overig',bank:selectedBank,id:Date.now()+ri});
+  });
+  return txs;
+}
+
+function showImportResult(parsed){
+  const inc=parsed.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0);
+  const exp=parsed.filter(t=>t.amount<0).reduce((s,t)=>s+t.amount,0);
+  document.getElementById('imp-cnt').textContent=parsed.length;
+  document.getElementById('imp-inc').textContent=fmt(inc);
+  document.getElementById('imp-exp').textContent='-'+fmt(Math.abs(exp));
+  document.getElementById('import-success').style.display='block';
+}
+
+function loadDemo(){
+  const months=['2026-03','2026-04','2026-05'];
+  const demos=[
+    {desc:'Loon werkgever 1',amount:2844,cat:'Inkomen'},{desc:'Loon werkgever 2',amount:2229,cat:'Inkomen'},
+    {desc:'Gezinsbijslag',amount:307,cat:'Inkomen'},{desc:'Colruyt winkelbedienden',amount:-112,cat:'Boodschappen'},
+    {desc:'Delhaize aankoop',amount:-98,cat:'Boodschappen'},{desc:'Lidl Belgium',amount:-67,cat:'Boodschappen'},
+    {desc:'Bakker Pieters',amount:-35,cat:'Bakker'},{desc:'H&M Belgium',amount:-145,cat:'Kleding'},
+    {desc:'Zara Hasselt',amount:-210,cat:'Kleding'},{desc:'Restaurant De Kroon',amount:-85,cat:'Vrije tijd'},
+    {desc:'Cinema Kinepolis',amount:-42,cat:'Vrije tijd'},{desc:'Proximus telecom',amount:-113,cat:'Telecom'},
+    {desc:'Netflix streaming',amount:-20,cat:'Abonnementen'},{desc:'Huur maand',amount:-790,cat:'Huur/Hypotheek'},
+    {desc:'Engie energie',amount:-130,cat:'Energie & water'},{desc:'AG Insurance auto',amount:-63,cat:'Verzekeringen'},
+    {desc:'Total benzinestation',amount:-78,cat:'Auto & transport'},{desc:'Bolero ETF IWDA',amount:-800,cat:'Beleggen'},
+    {desc:'Vakantie 2027 sparen',amount:-643,cat:'Sparen'},{desc:'Apotheek Noens',amount:-34,cat:'Gezondheid'},
+  ];
+  transactions=[];
+  months.forEach(m=>{ demos.forEach((d,i)=>{ transactions.push({...d,date:m+'-'+(10+i%20<10?'0':'')+(10+i%20),bank:i%3===0?'belfius':'kbc',id:Date.now()+Math.random()}); }); });
+  setActiveMonth();
+  showImportResult(transactions);
+  document.getElementById('import-success').style.display='block';
+}
+
+function setActiveMonth(){
+  const months=[...new Set(transactions.map(t=>t.date.substring(0,7)))].sort();
+  activeMonth=months[months.length-1]||'';
+  document.getElementById('page-sub').textContent=activeMonth;
+  document.getElementById('month-selector').textContent='▾ '+activeMonth;
+}
+
+function getMonths(){ return [...new Set(transactions.map(t=>t.date.substring(0,7)))].sort(); }
+function getActiveTxs(){ return transactions.filter(t=>t.date.startsWith(activeMonth)); }
+
+function renderDashboard(){
+  if(!transactions.length) return;
+  const txs=getActiveTxs();
+  const inc=txs.filter(t=>t.amount>0).reduce((s,t)=>s+t.amount,0);
+  const exp=txs.filter(t=>t.amount<0).reduce((s,t)=>s+Math.abs(t.amount),0);
+  const bal=inc-exp;
+  document.getElementById('m-inc').textContent=fmt(inc);
+  document.getElementById('m-exp').textContent=fmt(exp);
+  const bEl=document.getElementById('m-bal');
+  bEl.textContent=fmts(bal); bEl.style.color=bal>=0?'var(--green)':'var(--red)';
+  document.getElementById('m-cnt').textContent=txs.length;
+
+  const catTotals={};
+  txs.filter(t=>t.amount<0&&t.cat!=='Inkomen').forEach(t=>{ catTotals[t.cat]=(catTotals[t.cat]||0)+Math.abs(t.amount); });
+  const sorted=Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const total=sorted.reduce((s,[,v])=>s+v,0);
+
+  if(catChartInst) catChartInst.destroy();
+  catChartInst=new Chart(document.getElementById('catChart'),{
+    type:'doughnut',
+    data:{labels:sorted.map(([c])=>c),datasets:[{data:sorted.map(([,v])=>Math.round(v)),backgroundColor:sorted.map(([c])=>CAT_COLORS[CATS.indexOf(c)]||'#64748b'),borderWidth:0,hoverOffset:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.label+': '+fmt(ctx.raw)}}},cutout:'65%'}
+  });
+  document.getElementById('cat-legend').innerHTML=sorted.map(([c,v])=>`<span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><span style="width:8px;height:8px;border-radius:2px;background:${CAT_COLORS[CATS.indexOf(c)]};display:inline-block"></span>${c} ${fmt(v)}</span>`).join('');
+
+  const months=getMonths();
+  const mInc=months.map(m=>Math.round(transactions.filter(t=>t.date.startsWith(m)&&t.amount>0).reduce((s,t)=>s+t.amount,0)));
+  const mExp=months.map(m=>Math.round(transactions.filter(t=>t.date.startsWith(m)&&t.amount<0).reduce((s,t)=>s+Math.abs(t.amount),0)));
+  if(monthChartInst) monthChartInst.destroy();
+  monthChartInst=new Chart(document.getElementById('monthChart'),{
+    type:'bar',
+    data:{labels:months.map(m=>m.substring(5)),datasets:[{label:'Inkomsten',data:mInc,backgroundColor:'rgba(62,207,142,0.7)',borderSkipped:false},{label:'Uitgaven',data:mExp,backgroundColor:'rgba(246,96,96,0.7)',borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#7a90a8',callback:v=>'€'+Math.round(v/1000)+'k',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},x:{ticks:{color:'#7a90a8',font:{size:10}},grid:{display:false}}}}
+  });
+
+  const tips=[];
+  const kleding=catTotals['Kleding']||0;
+  const vrij=catTotals['Vrije tijd']||0;
+  if(kleding>300) tips.push({c:'tip-amber',t:'Kleding '+fmt(kleding)+' — boven plan. Halferen = +€'+Math.round(kleding/2)+' extra spaargeld.'});
+  if(vrij>400) tips.push({c:'tip-amber',t:'Vrije tijd '+fmt(vrij)+' — tijdelijk inperken naar €400 geeft €'+Math.round(vrij-400)+' extra.'});
+  if(bal>500) tips.push({c:'tip-green',t:'Saldo van '+fmt(bal)+' over — zet het surplus naar je beleggingsrekening!'});
+  if(bal<0) tips.push({c:'tip-red',t:'Negatief saldo '+fmts(bal)+' — bekijk welke categorieën over budget gaan.'});
+  document.getElementById('ai-tips-home').innerHTML=tips.length?'<div class="section-label">Inzichten</div>'+tips.map(({c,t})=>`<div class="tip ${c}">${t}</div>`).join(''):'';
+}
+
+function renderTx(){
+  const months=getMonths();
+  const tabsEl=document.getElementById('month-tabs');
+  tabsEl.innerHTML=months.map(m=>`<button class="month-tab${m===activeMonth?' active':''}" onclick="activeMonth='${m}';renderTx()">${m}</button>`).join('');
+  const search=(document.getElementById('tx-search').value||'').toLowerCase();
+  let txs=transactions.filter(t=>t.date.startsWith(activeMonth));
+  if(search) txs=txs.filter(t=>t.desc.toLowerCase().includes(search));
+  txs.sort((a,b)=>b.date.localeCompare(a.date));
+  const listEl=document.getElementById('tx-list');
+  if(!txs.length){ listEl.innerHTML='<div class="empty"><div class="empty-icon">&#128203;</div>Geen transacties</div>'; return; }
+  listEl.innerHTML=txs.slice(0,60).map(t=>{
+    const ci=CATS.indexOf(t.cat);
+    const col=CAT_COLORS[ci]||'#64748b';
+    const em=CAT_EMOJI[t.cat]||'&#128443;';
+    return `<div class="tx-item">
+      <div class="tx-dot" style="background:${col}22">${em}</div>
+      <div class="tx-info">
+        <div class="tx-desc">${t.desc}</div>
+        <div class="tx-cat">${t.cat} · ${t.date.substring(5)}</div>
+      </div>
+      <div class="tx-amount" style="color:${t.amount>0?'var(--green)':'var(--red)'}">${fmts(t.amount)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('tx-count').textContent=txs.length+' transacties';
+}
+
+function renderBudget(){
+  const txs=getActiveTxs();
+  const catTotals={};
+  txs.filter(t=>t.amount<0&&t.cat!=='Inkomen').forEach(t=>{ catTotals[t.cat]=(catTotals[t.cat]||0)+Math.abs(t.amount); });
+  const rowsEl=document.getElementById('budget-rows');
+  const alertsEl=document.getElementById('budget-alerts');
+  if(!txs.length){ rowsEl.innerHTML='<div class="empty" style="padding:20px 0"><div class="empty-icon">&#127919;</div>Laad data via Import</div>'; alertsEl.innerHTML=''; return; }
+  rowsEl.innerHTML=Object.entries(BUDGETS).filter(([c])=>c!=='Inkomen'&&(catTotals[c]||BUDGETS[c])).map(([cat,bud])=>{
+    const actual=catTotals[cat]||0;
+    const pct=bud?Math.min(100,Math.round(actual/bud*100)):0;
+    const col=actual>bud?'var(--red)':actual>bud*.8?'var(--amber)':'var(--green)';
+    return `<div class="bud-row">
+      <div class="bud-cat">${cat}</div>
+      <div class="bud-bar"><div class="prog-bg"><div class="prog-fill" style="width:${pct}%;background:${col}"></div></div></div>
+      <div class="bud-vals" style="color:${col}">${fmt(actual)}<br><span style="color:var(--muted)">${fmt(bud)}</span></div>
+    </div>`;
+  }).join('');
+  alertsEl.innerHTML=Object.entries(BUDGETS).filter(([c])=>c!=='Inkomen'&&catTotals[c]>BUDGETS[c]).map(([cat])=>`<div class="tip tip-red"><strong>${cat}</strong> — ${fmt(catTotals[cat])} vs budget ${fmt(BUDGETS[cat])} (+${fmt(catTotals[cat]-BUDGETS[cat])} over)</div>`).join('');
+}
+
+function renderGoals(){
+  const saveTxs=transactions.filter(t=>t.cat==='Sparen');
+  const belTxs=transactions.filter(t=>t.cat==='Beleggen');
+  const vakSaved=Math.round(saveTxs.reduce((s,t)=>s+Math.abs(t.amount),0));
+  const belSaved=Math.round(belTxs.reduce((s,t)=>s+Math.abs(t.amount),0));
+  const vakPct=Math.min(100,Math.round(vakSaved/cfg.vakDoel*100));
+  const belPct=Math.min(100,Math.round(belSaved/cfg.belDoel*100));
+  document.getElementById('pb-vak').style.width=vakPct+'%';
+  document.getElementById('pb-bel').style.width=belPct+'%';
+  document.getElementById('goal-vak-pct').textContent=vakPct+'%';
+  document.getElementById('goal-bel-pct').textContent=belPct+'%';
+  document.getElementById('goal-vak-lbl').textContent=fmt(vakSaved)+' gespaard';
+  document.getElementById('goal-bel-lbl').textContent=fmt(belSaved)+' belegd';
+  document.getElementById('goal-vak-saved').textContent=fmt(vakSaved);
+  document.getElementById('goal-bel-saved').textContent=fmt(belSaved);
+  document.getElementById('goal-vak-rest').textContent=fmt(Math.max(0,cfg.vakDoel-vakSaved));
+  document.getElementById('goal-bel-rest').textContent=fmt(Math.max(0,cfg.belDoel-belSaved));
+  document.getElementById('goal-vak-name').textContent=cfg.vakNaam;
+  document.getElementById('goal-vak-sub').textContent=fmt(cfg.vakMnd)+'/maand · deadline '+cfg.vakDeadline;
+  document.getElementById('goal-vak-total').textContent=fmt(cfg.vakDoel);
+  document.getElementById('goal-bel-name').textContent=cfg.belNaam;
+  document.getElementById('goal-bel-sub').textContent=fmt(cfg.belMnd)+'/maand · ETF IWDA/VWCE';
+  document.getElementById('goal-bel-total').textContent=fmt(cfg.belDoel);
+  const all=[...saveTxs,...belTxs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
+  document.getElementById('goal-txs').innerHTML=all.length?all.map(t=>`<div class="tx-item">
+    <div class="tx-dot" style="background:${t.cat==='Sparen'?'rgba(79,156,249,0.15)':'rgba(62,207,142,0.15)'}">${CAT_EMOJI[t.cat]}</div>
+    <div class="tx-info"><div class="tx-desc">${t.desc}</div><div class="tx-cat">${t.date}</div></div>
+    <div class="tx-amount" style="color:${t.cat==='Sparen'?'var(--accent)':'var(--green)'}">${fmt(Math.abs(t.amount))}</div>
+  </div>`).join(''):'<div class="empty" style="padding:16px 0"><div class="empty-icon">&#128200;</div>Nog geen spaar- of beleggingstransacties</div>';
+}
+</script>
+</body>
+</html>
